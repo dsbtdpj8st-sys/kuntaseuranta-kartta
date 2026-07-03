@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<meta name="robots" content="noindex, nofollow">
+<title>Kuntaseuranta — hoiva- ja erityisryhmähankkeet (Turku + Raisio)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--ink:#1b211f;--soft:#5c635f;--hair:#dfe3db;--accent:#2f6b63;
+    --v-kaava:#3a6ea5;--v-tontti:#e0a500;--v-lupa:#c1443b;--v-valmis:#7b8a86;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  #map{position:absolute;inset:0}
+  .panel{position:absolute;z-index:1000;background:#fff;border:1px solid var(--hair);
+    border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.15);font-family:var(--sans);color:var(--ink)}
+  .head{top:12px;left:12px;max-width:min(340px,calc(100vw - 24px));padding:11px 14px}
+  .head h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em;line-height:1.25}
+  .head p{margin:5px 0 0;font-size:12px;color:var(--soft);line-height:1.4}
+  .head .upd{font-family:var(--mono);font-size:11px}
+  .legend{bottom:22px;left:12px;padding:9px 12px}
+  .legend .t{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);margin:0 0 7px}
+  .legend .row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:2px 0;cursor:pointer;user-select:none}
+  .legend .row.off{opacity:.38}
+  .legend .sw{width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18);flex-shrink:0}
+  .legend .ct{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--soft);padding-left:10px}
+  .lp b{font-size:14px}
+  .leaflet-popup-content{margin:11px 13px;font-family:var(--sans);font-size:13px;line-height:1.5;color:var(--ink);min-width:210px;max-width:270px}
+  .lp .chip{display:inline-block;font-size:11px;font-weight:600;color:#fff;border-radius:20px;padding:2px 9px;margin:6px 6px 3px 0}
+  .lp .kunta{background:#e4efec;color:var(--accent);font-weight:650}
+  .lp table{border-collapse:collapse;margin-top:7px;width:100%}
+  .lp td{vertical-align:top;padding:2px 0;font-size:12.5px}
+  .lp td.k{color:var(--soft);white-space:nowrap;padding-right:9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  .lp .flag{margin-top:8px;font-size:11.5px;color:#8a5a1f;background:#fbf1e2;border:1px solid #f0dcbc;border-radius:7px;padding:6px 8px;line-height:1.4}
+  .lp a.src{display:inline-block;margin-top:9px;font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:7px;padding:6px 10px}
+  @media (max-width:620px){.head{max-width:calc(100vw - 24px)}.legend{bottom:12px}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel head">
+  <h1>Kuntaseuranta — hoiva- ja erityisryhmähankkeet</h1>
+  <p>Turku + Raisio · SHA:n markkinaseuranta · <span class="upd" id="upd"></span></p>
+</div>
+<div class="panel legend" id="legend"></div>
+<script>
+const VAIHE = {
+  "Kaavoitus":{label:"Kaavoitus",color:"#3a6ea5"},
+  "Tontti":{label:"Tontti",color:"#e0a500"},
+  "Lupa/rakentaminen":{label:"Lupa / rakentaminen",color:"#c1443b"},
+  "Valmis":{label:"Valmis / olemassa",color:"#7b8a86"}
+};
+const ORDER=["Kaavoitus","Tontti","Lupa/rakentaminen","Valmis"];
+const TARK={talo:"talotaso (tarkka)",katu:"katutaso (likimäärä)",kaupunginosa:"kaupunginosataso (karkea)"};
+const map=L.map("map",{zoomControl:true});
+const osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'});
+const sat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  {maxZoom:19,attribution:"Tiles &copy; Esri"});
+osm.addTo(map);
+L.control.layers({"Katukartta":osm,"Satelliitti":sat},null,{position:"topright"}).addTo(map);
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+const groups={}; const counts={};
+function popupHtml(p){
+  const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
+  const tark=TARK[p.tarkkuus]||p.tarkkuus||"";
+  const flag=p.tarkkuus&&p.tarkkuus!=="talo"
+    ? `<div class="flag">Sijainti ${esc(tark)} — piste kadun/alueen kohdalla, ei tarkassa tontissa.</div>`:"";
+  return `<div class="lp"><b>${esc(p.nimi)}</b><br>
+    <span class="chip kunta">${esc(p.kunta)}</span>
+    <span class="chip" style="background:${v.color}">${esc(v.label)}</span>
+    <table>
+      <tr><td class="k">Osoite</td><td>${esc(p.osoite)}</td></tr>
+      <tr><td class="k">Kehittäjä</td><td>${esc(p.kehittaja)}</td></tr>
+      <tr><td class="k">Käyttö</td><td>${esc(p.kaytto)}</td></tr>
+      <tr><td class="k">Viimeisin</td><td>${esc(p.detalji)}</td></tr>
+      <tr><td class="k">Pvm</td><td>${esc(p.pvm)}</td></tr>
+      <tr><td class="k">Varmuus</td><td>${esc(p.varmuus)}</td></tr>
+    </table>${flag}
+    <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa päätös lähteessä →</a></div>`;
+}
+fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
+  document.getElementById("upd").textContent="päivitetty "+(fc.updated||"");
+  const bounds=[];
+  for(const k of ORDER){groups[k]=L.layerGroup().addTo(map);counts[k]=0;}
+  for(const f of fc.features){
+    const p=f.properties, c=f.geometry.coordinates, ll=[c[1],c[0]];
+    const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
+    const approx=p.tarkkuus&&p.tarkkuus!=="talo";
+    const m=L.circleMarker(ll,{radius:9,fillColor:v.color,color:"#fff",weight:2.5,
+      fillOpacity:1,opacity:approx?.85:1});
+    m.bindPopup(popupHtml(p),{maxWidth:290});
+    m.bindTooltip(p.nimi,{direction:"top"});
+    (groups[p.vaihe]||groups.Kaavoitus).addLayer(m);
+    counts[p.vaihe]=(counts[p.vaihe]||0)+1; bounds.push(ll);
+  }
+  if(bounds.length) map.fitBounds(bounds,{padding:[45,45]});
+  else map.setView([60.47,22.25],11);
+  // legenda + suodatus
+  const leg=document.getElementById("legend");
+  leg.innerHTML='<p class="t">Hankevaihe — suodata klikkaamalla</p>';
+  for(const k of ORDER){
+    if(!counts[k]) continue;
+    const v=VAIHE[k];
+    const row=document.createElement("div"); row.className="row";
+    row.innerHTML=`<span class="sw" style="background:${v.color}"></span><span>${v.label}</span><span class="ct">${counts[k]}</span>`;
+    row.onclick=()=>{ if(map.hasLayer(groups[k])){map.removeLayer(groups[k]);row.classList.add("off");}
+      else{map.addLayer(groups[k]);row.classList.remove("off");} };
+    leg.appendChild(row);
+  }
+}).catch(e=>{document.getElementById("upd").textContent="datan lataus epäonnistui";});
+</script>
+</body>
+</html>
