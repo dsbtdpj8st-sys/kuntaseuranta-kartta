@@ -69,16 +69,20 @@ function popupHtml(p){
   const tark=TARK[p.tarkkuus]||p.tarkkuus||"";
   const flag=p.tarkkuus&&p.tarkkuus!=="talo"
     ? `<div class="flag">Sijainti ${esc(tark)} — piste kadun/alueen kohdalla, ei tarkassa tontissa.</div>`:"";
+  const row=(k,val)=> val ? `<tr><td class="k">${k}</td><td>${esc(val)}</td></tr>` : "";
   return `<div class="lp"><b>${esc(p.nimi)}</b><br>
     <span class="chip kunta">${esc(p.kunta)}</span>
     <span class="chip" style="background:${v.color}">${esc(v.label)}</span>
     <table>
-      <tr><td class="k">Osoite</td><td>${esc(p.osoite)}</td></tr>
-      <tr><td class="k">Kehittäjä</td><td>${esc(p.kehittaja)}</td></tr>
-      <tr><td class="k">Käyttö</td><td>${esc(p.kaytto)}</td></tr>
-      <tr><td class="k">Viimeisin</td><td>${esc(p.detalji)}</td></tr>
-      <tr><td class="k">Pvm</td><td>${esc(p.pvm)}</td></tr>
-      <tr><td class="k">Varmuus</td><td>${esc(p.varmuus)}</td></tr>
+      ${row("Osoite", p.osoite)}
+      ${row("Kehittäjä", p.kehittaja)}
+      ${row("Käyttö", p.kaytto)}
+      ${row("Kiinteistötunnus", p.kiinteistotunnus)}
+      ${row("Kaava", p.kaavatunnus)}
+      ${row("Aikaikkuna", p.aikaikkuna)}
+      ${row("Viimeisin", p.detalji)}
+      ${row("Pvm", p.pvm)}
+      ${row("Varmuus", p.varmuus)}
     </table>${flag}
     <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa päätös lähteessä →</a></div>`;
 }
@@ -93,7 +97,7 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     const m=L.circleMarker(ll,{radius:9,fillColor:v.color,color:"#fff",weight:2.5,
       fillOpacity:1,opacity:approx?.85:1});
     m.bindPopup(popupHtml(p),{maxWidth:290});
-    m.bindTooltip(p.nimi,{direction:"top"});
+    m.bindTooltip(esc(p.nimi),{direction:"top"});
     (groups[p.vaihe]||groups.Kaavoitus).addLayer(m);
     counts[p.vaihe]=(counts[p.vaihe]||0)+1; bounds.push(ll);
   }
