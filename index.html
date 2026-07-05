@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
 <meta name="robots" content="noindex, nofollow">
-<title>Kuntaseuranta — hoiva- ja erityisryhmähankkeet (Turku + Raisio)</title>
+<title>Kuntaseuranta — hoiva- ja erityisryhmähankkeet (Turku · Raisio · Espoo · Vantaa · Tampere)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -43,7 +43,7 @@
 <div id="map"></div>
 <div class="panel head">
   <h1>Kuntaseuranta — hoiva- ja erityisryhmähankkeet</h1>
-  <p>Turku + Raisio · SHA:n markkinaseuranta · <span class="upd" id="upd"></span></p>
+  <p>Turku · Raisio · Espoo · Vantaa · Tampere · SHA:n markkinaseuranta · <span class="upd" id="upd"></span></p>
 </div>
 <div class="panel legend" id="legend"></div>
 <script>
@@ -55,6 +55,7 @@ const VAIHE = {
 };
 const ORDER=["Kaavoitus","Tontti","Lupa/rakentaminen","Valmis"];
 const TARK={talo:"talotaso (tarkka)",katu:"katutaso (likimäärä)",kaupunginosa:"kaupunginosataso (karkea)"};
+const KAAVOITUS={Turku:"https://www.turku.fi/kaavoitus",Raisio:"https://www.raisio.fi/kaavoituskatsaus",Espoo:"https://www.espoo.fi/fi/kaavoitus",Vantaa:"https://www.vantaa.fi/fi/kaavoitus",Tampere:"https://www.tampere.fi/kaavoitus"};
 const map=L.map("map",{zoomControl:true});
 const osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
   {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'});
@@ -85,7 +86,7 @@ function popupHtml(p){
       ${row("Pvm", p.pvm)}
       ${row("Varmuus", p.varmuus)}
     </table>${flag}
-    <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa päätös lähteessä →</a></div>`;
+    <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa päätös lähteessä →</a>${KAAVOITUS[p.kunta]?`<a class="src" style="margin-left:6px" href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitusohjelma →</a>`:""}</div>`;
 }
 fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
   document.getElementById("upd").textContent="päivitetty "+(fc.updated||"");
