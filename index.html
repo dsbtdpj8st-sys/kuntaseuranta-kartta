@@ -47,7 +47,6 @@
   <p style="margin-top:4px">Erityisryhmien hoiva-/asumishankkeet kuntien päätöksenteosta. Toimijatiedot (operaattori/kehittäjä) julkisista lähteistä: uutiset, päätökset, tiedotteet.</p>
 </div>
 <div class="panel legend" id="legend"></div>
-<div class="panel legend" id="oplegend" style="left:auto;right:12px;bottom:22px;max-width:min(300px,calc(100vw - 24px))"></div>
 <script>
 const VAIHE = {
   "Kaavoitus":{label:"Kaavoitus",color:"#3a6ea5"},
@@ -77,7 +76,7 @@ function popupHtml(p){
     <span class="chip" style="background:${v.color}">${esc(v.label)}</span>
     <table>
       ${row("Osoite", p.osoite)}
-      ${p.operaattori?`<tr><td class="k">Operaattori</td><td><b>${esc(p.operaattori)}</b></td></tr>`:""}
+      <tr><td class="k">Operaattori</td><td>${p.operaattori?`<b>${esc(p.operaattori)}</b>`:`<span style="color:#8a908b">ei tiedossa</span>`}</td></tr>
       ${row("Kehittäjä", p.kehittaja)}
       ${row("Sijoittaja", p.sijoittaja)}
       ${row("Käyttö", p.kaytto)}
@@ -102,8 +101,8 @@ function opKey(p){
 }
 fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
   document.getElementById("upd").textContent="päivitetty "+(fc.updated||"");
-  const bounds=[], all=[], vaiheOff=new Set(), opOff=new Set();
-  const counts={}, opCounts={};
+  const bounds=[], all=[], vaiheOff=new Set();
+  const counts={};
   for(const f of fc.features){
     const p=f.properties, c=f.geometry.coordinates, ll=[c[1],c[0]];
     const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
@@ -116,20 +115,20 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     m.bindPopup(popupHtml(p),{maxWidth:290});
     m.bindTooltip(esc(p.nimi)+(known?" — "+esc(opKey(p)):""),{direction:"top"});
     m.addTo(map);
-    const vk=(p.vaihe in VAIHE)?p.vaihe:"Kaavoitus", ok=opKey(p);
-    all.push({m,vk,ok});
-    counts[vk]=(counts[vk]||0)+1; opCounts[ok]=(opCounts[ok]||0)+1; bounds.push(ll);
+    const vk=(p.vaihe in VAIHE)?p.vaihe:"Kaavoitus";
+    all.push({m,vk});
+    counts[vk]=(counts[vk]||0)+1; bounds.push(ll);
   }
   if(bounds.length) map.fitBounds(bounds,{padding:[45,45]});
   else map.setView([60.47,22.25],11);
   function refresh(){
     for(const a of all){
-      const show=!vaiheOff.has(a.vk)&&!opOff.has(a.ok);
+      const show=!vaiheOff.has(a.vk);
       if(show&&!map.hasLayer(a.m)) map.addLayer(a.m);
       if(!show&&map.hasLayer(a.m)) map.removeLayer(a.m);
     }
   }
-  // legenda 1: hankevaihe
+  // legenda: hankevaihe (operaattorisuodatin poistettu 8.7.2026 — turha + peitti karttaa puhelimella)
   const leg=document.getElementById("legend");
   leg.innerHTML='<p class="t">Hankevaihe — suodata klikkaamalla</p>';
   for(const k of ORDER){
@@ -140,21 +139,6 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     row.onclick=()=>{ vaiheOff.has(k)?vaiheOff.delete(k):vaiheOff.add(k);
       row.classList.toggle("off",vaiheOff.has(k)); refresh(); };
     leg.appendChild(row);
-  }
-  // legenda 2: operaattori (tunnetut ensin aakkosissa, "(ei tiedossa)" viimeisenä)
-  const ops=Object.keys(opCounts).sort((a,b)=>
-    (a==="(ei tiedossa)")-(b==="(ei tiedossa)") || a.localeCompare(b,"fi"));
-  const oleg=document.getElementById("oplegend");
-  oleg.innerHTML='<p class="t">Operaattori — suodata klikkaamalla</p>';
-  for(const o of ops){
-    const row=document.createElement("div"); row.className="row";
-    const sw=o==="(ei tiedossa)"
-      ?'<span class="sw" style="background:#fff"></span>'
-      :'<span class="sw" style="background:#fff;border-color:#1b211f;box-shadow:0 0 0 1px #1b211f"></span>';
-    row.innerHTML=`${sw}<span>${esc(o)}</span><span class="ct">${opCounts[o]}</span>`;
-    row.onclick=()=>{ opOff.has(o)?opOff.delete(o):opOff.add(o);
-      row.classList.toggle("off",opOff.has(o)); refresh(); };
-    oleg.appendChild(row);
   }
 }).catch(e=>{document.getElementById("upd").textContent="datan lataus epäonnistui";});
 </script>
