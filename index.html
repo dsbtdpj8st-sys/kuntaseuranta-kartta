@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
 <meta name="robots" content="noindex, nofollow">
-<title>Kuntaseuranta — hoiva- ja erityisryhmähankkeet (Turku · Raisio · Espoo · Vantaa · Tampere)</title>
+<title>Kuntaseuranta — hoiva- ja erityisryhmähankkeet (sisäinen)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -43,9 +43,11 @@
 <div id="map"></div>
 <div class="panel head">
   <h1>Kuntaseuranta — hoiva- ja erityisryhmähankkeet</h1>
-  <p>Turku · Raisio · Espoo · Vantaa · Tampere · SHA:n markkinaseuranta · <span class="upd" id="upd"></span></p>
+  <p>Turku · Raisio · Espoo · Vantaa · Tampere · Helsinki · <span class="upd" id="upd"></span></p>
+  <p style="margin-top:4px">Erityisryhmien hoiva-/asumishankkeet kuntien päätöksenteosta. Toimijatiedot (operaattori/kehittäjä) julkisista lähteistä: uutiset, päätökset, tiedotteet.</p>
 </div>
 <div class="panel legend" id="legend"></div>
+<div class="panel legend" id="oplegend" style="left:auto;right:12px;bottom:22px;max-width:min(300px,calc(100vw - 24px))"></div>
 <script>
 const VAIHE = {
   "Kaavoitus":{label:"Kaavoitus",color:"#3a6ea5"},
@@ -64,7 +66,6 @@ const sat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Worl
 osm.addTo(map);
 L.control.layers({"Katukartta":osm,"Satelliitti":sat},null,{position:"topright"}).addTo(map);
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
-const groups={}; const counts={};
 function popupHtml(p){
   const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
   const tark=TARK[p.tarkkuus]||p.tarkkuus||"";
@@ -76,36 +77,59 @@ function popupHtml(p){
     <span class="chip" style="background:${v.color}">${esc(v.label)}</span>
     <table>
       ${row("Osoite", p.osoite)}
+      ${p.operaattori?`<tr><td class="k">Operaattori</td><td><b>${esc(p.operaattori)}</b></td></tr>`:""}
       ${row("Kehittäjä", p.kehittaja)}
+      ${row("Sijoittaja", p.sijoittaja)}
       ${row("Käyttö", p.kaytto)}
       ${row("Kiinteistötunnus", p.kiinteistotunnus)}
       ${row("Kaava", p.kaavatunnus)}
       ${row("Rakennusoikeus", p.koko_proxy)}
+      ${row("~Paikat", p.paikat)}
+      ${row("~Valmis", p.valmis)}
       ${row("Aikaikkuna", p.aikaikkuna)}
+      ${row("Toimijalähde", p.toimijat_lahde)}
       ${row("Viimeisin", p.detalji)}
       ${row("Pvm", p.pvm)}
       ${row("Varmuus", p.varmuus)}
     </table>${flag}
     <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa päätös lähteessä →</a>${KAAVOITUS[p.kunta]?`<a class="src" style="margin-left:6px" href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitusohjelma →</a>`:""}</div>`;
 }
+// Operaattoriryhmä suodatinta varten: sulkeet pois ("IKIFIT (tulossa)" → "IKIFIT"),
+// tyhjä → "(ei tiedossa)".
+function opKey(p){
+  const o=(p.operaattori||"").replace(/\s*\(.*$/,"").trim();
+  return o||"(ei tiedossa)";
+}
 fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
   document.getElementById("upd").textContent="päivitetty "+(fc.updated||"");
-  const bounds=[];
-  for(const k of ORDER){groups[k]=L.layerGroup().addTo(map);counts[k]=0;}
+  const bounds=[], all=[], vaiheOff=new Set(), opOff=new Set();
+  const counts={}, opCounts={};
   for(const f of fc.features){
     const p=f.properties, c=f.geometry.coordinates, ll=[c[1],c[0]];
     const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
     const approx=p.tarkkuus&&p.tarkkuus!=="talo";
-    const m=L.circleMarker(ll,{radius:9,fillColor:v.color,color:"#fff",weight:2.5,
+    const known=!!p.operaattori;
+    // operaattori tiedossa → tumma reunus erottaa attribuoidut hankkeet yhdellä silmäyksellä
+    const m=L.circleMarker(ll,{radius:known?10:9,fillColor:v.color,
+      color:known?"#1b211f":"#fff",weight:known?3:2.5,
       fillOpacity:1,opacity:approx?.85:1});
     m.bindPopup(popupHtml(p),{maxWidth:290});
-    m.bindTooltip(esc(p.nimi),{direction:"top"});
-    (groups[p.vaihe]||groups.Kaavoitus).addLayer(m);
-    counts[p.vaihe]=(counts[p.vaihe]||0)+1; bounds.push(ll);
+    m.bindTooltip(esc(p.nimi)+(known?" — "+esc(opKey(p)):""),{direction:"top"});
+    m.addTo(map);
+    const vk=(p.vaihe in VAIHE)?p.vaihe:"Kaavoitus", ok=opKey(p);
+    all.push({m,vk,ok});
+    counts[vk]=(counts[vk]||0)+1; opCounts[ok]=(opCounts[ok]||0)+1; bounds.push(ll);
   }
   if(bounds.length) map.fitBounds(bounds,{padding:[45,45]});
   else map.setView([60.47,22.25],11);
-  // legenda + suodatus
+  function refresh(){
+    for(const a of all){
+      const show=!vaiheOff.has(a.vk)&&!opOff.has(a.ok);
+      if(show&&!map.hasLayer(a.m)) map.addLayer(a.m);
+      if(!show&&map.hasLayer(a.m)) map.removeLayer(a.m);
+    }
+  }
+  // legenda 1: hankevaihe
   const leg=document.getElementById("legend");
   leg.innerHTML='<p class="t">Hankevaihe — suodata klikkaamalla</p>';
   for(const k of ORDER){
@@ -113,9 +137,24 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     const v=VAIHE[k];
     const row=document.createElement("div"); row.className="row";
     row.innerHTML=`<span class="sw" style="background:${v.color}"></span><span>${v.label}</span><span class="ct">${counts[k]}</span>`;
-    row.onclick=()=>{ if(map.hasLayer(groups[k])){map.removeLayer(groups[k]);row.classList.add("off");}
-      else{map.addLayer(groups[k]);row.classList.remove("off");} };
+    row.onclick=()=>{ vaiheOff.has(k)?vaiheOff.delete(k):vaiheOff.add(k);
+      row.classList.toggle("off",vaiheOff.has(k)); refresh(); };
     leg.appendChild(row);
+  }
+  // legenda 2: operaattori (tunnetut ensin aakkosissa, "(ei tiedossa)" viimeisenä)
+  const ops=Object.keys(opCounts).sort((a,b)=>
+    (a==="(ei tiedossa)")-(b==="(ei tiedossa)") || a.localeCompare(b,"fi"));
+  const oleg=document.getElementById("oplegend");
+  oleg.innerHTML='<p class="t">Operaattori — suodata klikkaamalla</p>';
+  for(const o of ops){
+    const row=document.createElement("div"); row.className="row";
+    const sw=o==="(ei tiedossa)"
+      ?'<span class="sw" style="background:#fff"></span>'
+      :'<span class="sw" style="background:#fff;border-color:#1b211f;box-shadow:0 0 0 1px #1b211f"></span>';
+    row.innerHTML=`${sw}<span>${esc(o)}</span><span class="ct">${opCounts[o]}</span>`;
+    row.onclick=()=>{ opOff.has(o)?opOff.delete(o):opOff.add(o);
+      row.classList.toggle("off",opOff.has(o)); refresh(); };
+    oleg.appendChild(row);
   }
 }).catch(e=>{document.getElementById("upd").textContent="datan lataus epäonnistui";});
 </script>
