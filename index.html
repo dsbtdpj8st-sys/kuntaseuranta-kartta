@@ -45,6 +45,15 @@
   .head ul{margin:6px 0 0;padding-left:16px;max-height:38vh;overflow:auto}
   .head li{margin:0 0 5px;line-height:1.35}
   .head li .m{color:var(--soft)}
+  .sis{width:14px;height:14px;background:#6b3fa0;border:2px solid #fff;transform:rotate(45deg);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+  .legend .sisrow{margin-top:6px;border-top:1px solid var(--hair);padding-top:6px;color:#6b3fa0;font-weight:600}
+  #lukko{position:fixed;inset:0;z-index:2000;background:rgba(27,33,31,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+  #lukko[hidden]{display:none}
+  #lukko form{background:#fff;border-radius:12px;padding:20px 22px;max-width:340px;width:100%;font-family:var(--sans);box-shadow:0 4px 24px rgba(0,0,0,.3)}
+  #lukko h2{margin:0 0 6px;font-size:16px} #lukko p{margin:0 0 12px;font-size:12.5px;color:var(--soft)}
+  #lukko input[type=password]{width:100%;font-size:15px;padding:9px 10px;border:1px solid var(--hair);border-radius:8px}
+  #lukko button{margin-top:10px;width:100%;font-size:14px;font-weight:600;padding:9px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+  #lukko .er{color:#c1443b;font-size:12.5px;min-height:1em;margin-top:6px} #lukko label{font-size:12.5px;color:var(--soft);display:block;margin-top:8px}
   @media (max-width:620px){.head{max-width:calc(100vw - 24px)}.legend{bottom:12px}}
 </style>
 </head>
@@ -52,21 +61,30 @@
 <div id="map"></div>
 <div class="panel head">
   <h1>Kuntaseuranta — hoiva- ja erityisryhmähankkeet</h1>
-  <p>Turku · Raisio · Espoo · Vantaa · Tampere · Helsinki · <span class="upd" id="upd"></span></p>
+  <p>Turku · Raisio · Helsinki · Espoo · Vantaa · Tampere · Kangasala · Pirkkala · Ylöjärvi · <span class="upd" id="upd"></span></p>
   <p style="margin-top:4px">Erityisryhmien hoiva-/asumishankkeet kuntien päätöksenteosta. Toimijatiedot (operaattori/kehittäjä) julkisista lähteistä: uutiset, päätökset, tiedotteet.</p>
   <details id="ilman" hidden><summary></summary><ul></ul></details>
 </div>
 <div class="panel legend" id="legend"></div>
+<div id="lukko" hidden><form><h2>Kuntaseuranta — sisäinen kartta</h2><p>Kirjoita salasana.</p>
+  <input type="password" autocomplete="current-password" aria-label="Salasana">
+  <label><input type="checkbox" id="muista"> Muista tällä laitteella</label>
+  <button type="submit">Avaa</button><div class="er"></div></form></div>
 <script>
 const VAIHE = {
+  "Suunnitelma":{label:"HVA-suunnitelma",color:"#8a63b8"},
   "Kaavoitus":{label:"Kaavoitus",color:"#3a6ea5"},
   "Tontti":{label:"Tontti",color:"#e0a500"},
   "Lupa/rakentaminen":{label:"Lupa / rakentaminen",color:"#c1443b"},
   "Valmis":{label:"Valmis / olemassa",color:"#7b8a86"}
 };
-const ORDER=["Kaavoitus","Tontti","Lupa/rakentaminen","Valmis"];
+const ORDER=["Suunnitelma","Kaavoitus","Tontti","Lupa/rakentaminen","Valmis"];
 const TARK={talo:"talotaso (tarkka)",katu:"katutaso (likimäärä)",kaupunginosa:"kaupunginosataso (karkea)"};
-const KAAVOITUS={Turku:"https://www.turku.fi/kaavoitus",Raisio:"https://www.raisio.fi/kaavoituskatsaus",Espoo:"https://www.espoo.fi/fi/kaavoitus",Vantaa:"https://www.vantaa.fi/fi/kaavoitus",Tampere:"https://www.tampere.fi/kaavoitus"};
+const KAAVOITUS={Turku:"https://www.turku.fi/kaavoitus",Raisio:"https://www.raisio.fi/kaavoituskatsaus",Espoo:"https://www.espoo.fi/fi/kaavoitus",Vantaa:"https://www.vantaa.fi/fi/kaavoitus",Tampere:"https://www.tampere.fi/kaavoitus",
+  Helsinki:"https://www.hel.fi/fi/kaupunkiymparisto-ja-liikenne/kaupunkisuunnittelu-ja-rakentaminen",
+  Kangasala:"https://www.kangasala.fi/asu-hyvin/kaavoitus/nahtavilla-ja-vireilla-olevia-asemakaavoja-ja-ranta-asemakaavoja/",
+  Pirkkala:"https://www.pirkkala.fi/kehita-pirkkalaa/kaavat/vireilla-olevat-asemakaavat/",
+  "Ylöjärvi":"https://www.ylojarvi.fi/asemakaavat-vireilla/"};
 const map=L.map("map",{zoomControl:true});
 const osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
   {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'});
@@ -91,6 +109,7 @@ function popupHtml(p){
       ${row("Sijoittaja", p.sijoittaja)}
       ${row("Käyttö", p.kaytto)}
       ${row("Lupa", p.lupa)}
+      ${row("HVA-suunnitelma", p.hva)}
       ${row("Kiinteistötunnus", p.kiinteistotunnus)}
       ${row("Kaava", p.kaavatunnus)}
       ${row("Rakennusoikeus", p.koko_proxy)}
@@ -101,7 +120,7 @@ function popupHtml(p){
       ${row("Pvm", p.pvm)}
       ${row("Varmuus", p.varmuus)}
     </table>${flag}
-    <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa päätös lähteessä →</a>${KAAVOITUS[p.kunta]?`<a class="src" style="margin-left:6px" href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitusohjelma →</a>`:""}</div>`;
+    <a class="src" href="${esc(p.url)}" target="_blank" rel="noopener">Avaa lähde →</a>${p.hva_url&&p.hva_url!==p.url?`<a class="src" style="margin-left:6px" href="${esc(p.hva_url)}" target="_blank" rel="noopener">HVA-lähde →</a>`:""}${KAAVOITUS[p.kunta]?`<a class="src" style="margin-left:6px" href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitusohjelma →</a>`:""}</div>`;
 }
 // Operaattoriryhmä suodatinta varten: sulkeet pois ("IKIFIT (tulossa)" → "IKIFIT"),
 // tyhjä → "(ei tiedossa)".
@@ -109,7 +128,17 @@ function opKey(p){
   const o=(p.operaattori||"").replace(/\s*[(;].*$/,"").replace(/\s+(Oy|Oyj|Ab)$/,"").trim();
   return o||"(ei tiedossa)";
 }
-fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
+let SHOW_INT=false;
+function sisHtml(s){
+  const row=(k,val)=> val ? `<tr><td class="k">${k}</td><td>${esc(val)}</td></tr>` : "";
+  return `<div class="lp"><b>${esc(s.nimi)}</b><br><span class="chip" style="background:#6b3fa0">SISÄINEN</span>
+    <span class="chip kunta">${esc(s.kunta||"")}</span><table>
+    ${row("Tyyppi", s.tyyppi)}${row("Tarjoaja", s.tarjoaja)}${row("Tullut", s.tullut)}${row("Koko", s.koko)}
+    ${row("Tila", s.tila)}${row("Seuraava", s.seuraava)}${row("Sijainti", s.sijainti_teksti)}${row("Muistiinpano", s.sisainen)}
+    ${row("Kansio", s.kansio)}</table></div>`;
+}
+function render(fc){
+
   document.getElementById("upd").textContent="päivitetty "+(fc.updated||"");
   const bounds=[], all=[], vaiheOff=new Set();
   const counts={};
@@ -122,12 +151,28 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     const m=L.circleMarker(ll,{radius:known?10:9,fillColor:v.color,
       color:known?"#1b211f":"#fff",weight:known?3:2.5,
       fillOpacity:1,opacity:approx?.85:1});
-    m.bindPopup(popupHtml(p),{maxWidth:290,maxHeight:Math.round(innerHeight*0.68)});
     m.addTo(map);
     const vk=(p.vaihe in VAIHE)?p.vaihe:"Kaavoitus";
-    // nimi "Osoite — kehittäjä" + vuokralainen näkyviin avaamatta palloa (15.9.2026)
-    all.push({m,vk,label:esc(p.nimi)+(known?" → "+esc(opKey(p)):""),perm:null});
+    all.push({m,vk,p,perm:null});
     counts[vk]=(counts[vk]||0)+1; bounds.push(ll);
+  }
+  // sisäinen taso (vain salatussa versiossa): aihiot + sisäiset hankkeet vinoneliöinä
+  for(const s of (fc.sisaiset||[])){
+    const ll=[s.lat,s.lon];
+    const m=L.marker(ll,{icon:L.divIcon({className:"",html:'<div class="sis"></div>',iconSize:[18,18],iconAnchor:[9,9]})});
+    all.push({m,vk:"_sis",p:s,perm:null,sis:true});
+  }
+  function cur(p){ return SHOW_INT&&p._int ? Object.assign({},p,p._int) : p; }
+  function labelOf(a){ const q=cur(a.p); if(a.sis) return "◆ "+esc(q.nimi);
+    return esc(q.nimi)+(q.operaattori?" → "+esc(opKey(q)):""); }
+  function bindAll(){
+    for(const a of all){
+      const q=cur(a.p);
+      a.m.unbindPopup();
+      a.m.bindPopup(a.sis?sisHtml(q):popupHtml(q),{maxWidth:290,maxHeight:Math.round(innerHeight*0.68)});
+      a.perm=null;
+    }
+    setLabels();
   }
   // lähellä (zoom ≥ LABEL_ZOOM) nimet pysyvästi näkyvissä, kauempana hover — ei peitä karttaa
   const LABEL_ZOOM=13;
@@ -135,6 +180,7 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     const perm=map.getZoom()>=LABEL_ZOOM;
     for(const a of all){
       if(a.perm===perm) continue;
+      a.label=labelOf(a);
       a.m.unbindTooltip();
       a.m.bindTooltip(a.label,perm?{permanent:true,direction:"right",offset:[9,0],className:"lbl"}:{direction:"top"});
       a.perm=perm;
@@ -155,10 +201,12 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     if(b.length) map.fitBounds(b,{padding:[45,45]}); else map.setView([60.47,22.25],11);
     setLabels();
   }
+  bindAll();
   fit();
   window.addEventListener("hashchange",fit);
   // tiedossa olevat hankkeet ilman sijaintia
-  const il=fc.ilman_sijaintia||[];
+  function ilmanLista(){
+  const il=(fc.ilman_sijaintia||[]).concat(SHOW_INT?(fc.sisaiset_ilman||[]):[]);
   if(il.length){
     const det=document.getElementById("ilman");
     det.querySelector("summary").textContent=`Tiedossa, sijainti auki (${il.length})`;
@@ -169,9 +217,11 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
       (x.url?` <a href="${esc(x.url)}" target="_blank" rel="noopener">lähde</a>`:"")+`</li>`).join("");
     det.hidden=false;
   }
+  }
+  ilmanLista();
   function refresh(){
     for(const a of all){
-      const show=!vaiheOff.has(a.vk);
+      const show=a.sis ? SHOW_INT : !vaiheOff.has(a.vk);
       if(show&&!map.hasLayer(a.m)) map.addLayer(a.m);
       if(!show&&map.hasLayer(a.m)) map.removeLayer(a.m);
     }
@@ -188,6 +238,39 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
       row.classList.toggle("off",vaiheOff.has(k)); refresh(); };
     leg.appendChild(row);
   }
+  // salatussa versiossa: sisäiset tiedot erikseen päälle (oletus pois → kartan voi näyttää palaverissa)
+  if(fc.salattu){
+    const nSis=(fc.sisaiset||[]).length;
+    const row=document.createElement("label"); row.className="row sisrow";
+    row.innerHTML=`<input type="checkbox" id="sisChk"><span>Näytä sisäiset tiedot ja aihiot</span>`;
+    leg.appendChild(row);
+    row.querySelector("input").onchange=e=>{ SHOW_INT=e.target.checked; map.closePopup(); bindAll(); refresh(); ilmanLista(); };
+  }
+}
+// Salattu versio: data.enc.json (AES-GCM, avain salasanasta PBKDF2:lla) → salasanakysely. Muuten avoin geojson.
+const _b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function avaa(enc,pw){
+  const km=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:_b(enc.salt),iterations:enc.iter,hash:"SHA-256"},
+    km,{name:"AES-GCM",length:256},false,["decrypt"]);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:_b(enc.iv)},key,_b(enc.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+function kysy(enc){
+  const ov=document.getElementById("lukko"); ov.hidden=false;
+  const f=ov.querySelector("form"), inp=ov.querySelector("input[type=password]"), er=ov.querySelector(".er");
+  f.onsubmit=async ev=>{ ev.preventDefault(); er.textContent="";
+    try{ const fc=await avaa(enc,inp.value);
+      try{ if(ov.querySelector("#muista").checked) localStorage.setItem("ks_pw",inp.value); }catch(e){}
+      ov.hidden=true; render(fc);
+    }catch(e){ er.textContent="Väärä salasana."; inp.select(); } };
+  inp.focus();
+}
+fetch("data.enc.json",{cache:"no-store"}).then(r=>r.ok?r.json():null).catch(()=>null).then(async enc=>{
+  if(!enc){ return fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(render); }
+  let pw=null; try{ pw=localStorage.getItem("ks_pw"); }catch(e){}
+  if(pw){ try{ render(await avaa(enc,pw)); return; }catch(e){ try{ localStorage.removeItem("ks_pw"); }catch(e2){} } }
+  kysy(enc);
 }).catch(e=>{document.getElementById("upd").textContent="datan lataus epäonnistui";});
 </script>
 </body>
