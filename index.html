@@ -36,6 +36,15 @@
   .lp td.k{color:var(--soft);white-space:nowrap;padding-right:9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
   .lp .flag{margin-top:8px;font-size:11.5px;color:#8a5a1f;background:#fbf1e2;border:1px solid #f0dcbc;border-radius:7px;padding:6px 8px;line-height:1.4}
   .lp a.src{display:inline-block;margin-top:9px;font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:7px;padding:6px 10px}
+  .leaflet-tooltip.lbl{background:rgba(255,255,255,.92);border:1px solid var(--hair);box-shadow:none;
+    font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink);padding:1px 6px;border-radius:5px}
+  .leaflet-tooltip.lbl:before{display:none}
+  .head.hide{display:none}
+  .head details{margin-top:7px;font-size:12px}
+  .head summary{cursor:pointer;color:var(--accent);font-weight:600}
+  .head ul{margin:6px 0 0;padding-left:16px;max-height:38vh;overflow:auto}
+  .head li{margin:0 0 5px;line-height:1.35}
+  .head li .m{color:var(--soft)}
   @media (max-width:620px){.head{max-width:calc(100vw - 24px)}.legend{bottom:12px}}
 </style>
 </head>
@@ -45,6 +54,7 @@
   <h1>Kuntaseuranta — hoiva- ja erityisryhmähankkeet</h1>
   <p>Turku · Raisio · Espoo · Vantaa · Tampere · Helsinki · <span class="upd" id="upd"></span></p>
   <p style="margin-top:4px">Erityisryhmien hoiva-/asumishankkeet kuntien päätöksenteosta. Toimijatiedot (operaattori/kehittäjä) julkisista lähteistä: uutiset, päätökset, tiedotteet.</p>
+  <details id="ilman" hidden><summary></summary><ul></ul></details>
 </div>
 <div class="panel legend" id="legend"></div>
 <script>
@@ -80,13 +90,13 @@ function popupHtml(p){
       ${row("Kehittäjä", p.kehittaja)}
       ${row("Sijoittaja", p.sijoittaja)}
       ${row("Käyttö", p.kaytto)}
+      ${row("Lupa", p.lupa)}
       ${row("Kiinteistötunnus", p.kiinteistotunnus)}
       ${row("Kaava", p.kaavatunnus)}
       ${row("Rakennusoikeus", p.koko_proxy)}
       ${row("~Paikat", p.paikat)}
       ${row("~Valmis", p.valmis)}
       ${row("Aikaikkuna", p.aikaikkuna)}
-      ${row("Toimijalähde", p.toimijat_lahde)}
       ${row("Viimeisin", p.detalji)}
       ${row("Pvm", p.pvm)}
       ${row("Varmuus", p.varmuus)}
@@ -96,7 +106,7 @@ function popupHtml(p){
 // Operaattoriryhmä suodatinta varten: sulkeet pois ("IKIFIT (tulossa)" → "IKIFIT"),
 // tyhjä → "(ei tiedossa)".
 function opKey(p){
-  const o=(p.operaattori||"").replace(/\s*\(.*$/,"").trim();
+  const o=(p.operaattori||"").replace(/\s*[(;].*$/,"").replace(/\s+(Oy|Oyj|Ab)$/,"").trim();
   return o||"(ei tiedossa)";
 }
 fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
@@ -112,15 +122,53 @@ fetch("hankkeet.geojson",{cache:"no-store"}).then(r=>r.json()).then(fc=>{
     const m=L.circleMarker(ll,{radius:known?10:9,fillColor:v.color,
       color:known?"#1b211f":"#fff",weight:known?3:2.5,
       fillOpacity:1,opacity:approx?.85:1});
-    m.bindPopup(popupHtml(p),{maxWidth:290});
-    m.bindTooltip(esc(p.nimi)+(known?" — "+esc(opKey(p)):""),{direction:"top"});
+    m.bindPopup(popupHtml(p),{maxWidth:290,maxHeight:Math.round(innerHeight*0.68)});
     m.addTo(map);
     const vk=(p.vaihe in VAIHE)?p.vaihe:"Kaavoitus";
-    all.push({m,vk});
+    // nimi "Osoite — kehittäjä" + vuokralainen näkyviin avaamatta palloa (15.9.2026)
+    all.push({m,vk,label:esc(p.nimi)+(known?" → "+esc(opKey(p)):""),perm:null});
     counts[vk]=(counts[vk]||0)+1; bounds.push(ll);
   }
-  if(bounds.length) map.fitBounds(bounds,{padding:[45,45]});
-  else map.setView([60.47,22.25],11);
+  // lähellä (zoom ≥ LABEL_ZOOM) nimet pysyvästi näkyvissä, kauempana hover — ei peitä karttaa
+  const LABEL_ZOOM=13;
+  function setLabels(){
+    const perm=map.getZoom()>=LABEL_ZOOM;
+    for(const a of all){
+      if(a.perm===perm) continue;
+      a.m.unbindTooltip();
+      a.m.bindTooltip(a.label,perm?{permanent:true,direction:"right",offset:[9,0],className:"lbl"}:{direction:"top"});
+      a.perm=perm;
+    }
+  }
+  map.on("zoomend",setLabels);
+  // otsikkopaneeli peitti ponnahdusikkunan → piiloon siksi aikaa kun pallo on auki
+  const head=document.querySelector(".head");
+  map.on("popupopen",()=>head.classList.add("hide"));
+  map.on("popupclose",()=>head.classList.remove("hide"));
+  // #Turku (tms.) linkin perässä → avautuu suoraan sen kunnan hankkeisiin (palaverikäyttö)
+  function fit(){
+    if(!map.getSize().x){ setTimeout(fit,300); return; }   // piilotettu välilehti: odota kokoa
+    const k=decodeURIComponent(location.hash.slice(1)).toLowerCase();
+    const kb=k?fc.features.filter(f=>(f.properties.kunta||"").toLowerCase()===k)
+                .map(f=>[f.geometry.coordinates[1],f.geometry.coordinates[0]]):[];
+    const b=kb.length?kb:bounds;
+    if(b.length) map.fitBounds(b,{padding:[45,45]}); else map.setView([60.47,22.25],11);
+    setLabels();
+  }
+  fit();
+  window.addEventListener("hashchange",fit);
+  // tiedossa olevat hankkeet ilman sijaintia
+  const il=fc.ilman_sijaintia||[];
+  if(il.length){
+    const det=document.getElementById("ilman");
+    det.querySelector("summary").textContent=`Tiedossa, sijainti auki (${il.length})`;
+    det.querySelector("ul").innerHTML=il.map(x=>`<li><b>${esc(x.kunta)}:</b> ${esc(x.nimi)}`+
+      (x.operaattori?` <span class="m">→ ${esc(x.operaattori)}</span>`:"")+
+      (x.paikat?` <span class="m">· ${esc(x.paikat)}</span>`:"")+
+      (x.huom?`<br><span class="m">${esc(x.huom)}</span>`:"")+
+      (x.url?` <a href="${esc(x.url)}" target="_blank" rel="noopener">lähde</a>`:"")+`</li>`).join("");
+    det.hidden=false;
+  }
   function refresh(){
     for(const a of all){
       const show=!vaiheOff.has(a.vk);
