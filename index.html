@@ -28,14 +28,14 @@
   .legend .sw{width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.18);flex-shrink:0}
   .legend .ct{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--soft);padding-left:10px}
   .lp b{font-size:14px}
-  .leaflet-popup-content{margin:10px 12px;font-family:var(--sans);font-size:12.5px;line-height:1.38;color:var(--ink);min-width:230px;max-width:min(320px,calc(100vw - 70px))}
+  .leaflet-popup-content{margin:10px 12px;font-family:var(--sans);font-size:12.5px;line-height:1.38;color:var(--ink);min-width:230px;max-width:min(360px,calc(100vw - 70px));max-height:min(64vh,540px);overflow-y:auto;overscroll-behavior:contain}
   .lp .tun{margin-top:6px;font-size:11px;color:var(--soft);line-height:1.35}
   .lp .lnk{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px 12px}
   .lp .lnk a{font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none}
   .lp .chip{display:inline-block;font-size:11px;font-weight:600;color:#fff;border-radius:20px;padding:2px 9px;margin:6px 6px 3px 0}
   .lp .kunta{background:#e4efec;color:var(--accent);font-weight:650}
   .lp table{border-collapse:collapse;margin-top:7px;width:100%}
-  .lp td{vertical-align:top;padding:1px 0;font-size:12.5px}
+  .lp td{vertical-align:top;padding:1px 0;font-size:12.5px;overflow-wrap:anywhere;word-break:break-word}
   .lp td.k{color:var(--soft);white-space:nowrap;padding-right:9px;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
   .lp .flag{margin-top:8px;font-size:11.5px;color:#8a5a1f;background:#fbf1e2;border:1px solid #f0dcbc;border-radius:7px;padding:6px 8px;line-height:1.4}
   .lp a.src{display:inline-block;margin-top:9px;font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:7px;padding:6px 10px}
@@ -97,11 +97,10 @@ osm.addTo(map);
 L.control.layers({"Katukartta":osm,"Satelliitti":sat},null,{position:"topright"}).addTo(map);
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function popupHtml(p){
-  // 15.9.2026 (Niko): kaikki yhdellä silmäyksellä ilman vieritystä → pitkät tekstit lyhennetään
-  // (koko teksti näkyy vietäessä hiiri rivin päälle), tunnisterivit yhdelle harmaalle riville.
+  // 17.9.2026 (Niko): teksti ei saa katketa "…":een — pitkä arvo rivittyy kokonaan.
+  // Popupilla on korkeuskatto (CSS), joten poikkeuksellisen pitkä kohde vieritetään, ei katkaista.
   const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
-  const cut=(s,n)=>{s=String(s==null?"":s).trim(); return s.length>n? s.slice(0,n-1).trimEnd()+"…" : s;};
-  const row=(k,val,n)=> val ? `<tr><td class="k">${k}</td><td title="${esc(val)}">${esc(cut(val,n||110))}</td></tr>` : "";
+  const row=(k,val)=> val ? `<tr><td class="k">${k}</td><td>${esc(String(val).trim())}</td></tr>` : "";
   const approx=p.tarkkuus&&p.tarkkuus!=="talo";
   const nimiOs=p.osoite&&String(p.nimi||"").toLowerCase().includes(String(p.osoite).toLowerCase());
   const viim=[p.pvm,p.detalji].filter(Boolean).join(" · ");
@@ -110,21 +109,24 @@ function popupHtml(p){
             .filter(Boolean).map(esc).join(" · ");
   const lnk=[`<a href="${esc(p.url)}" target="_blank" rel="noopener">Lähde →</a>`,
              p.hva_url&&p.hva_url!==p.url?`<a href="${esc(p.hva_url)}" target="_blank" rel="noopener">HVA-lähde →</a>`:"",
-             KAAVOITUS[p.kunta]?`<a href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitus →</a>`:""]
+             KAAVOITUS[p.kunta]?`<a href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitus →</a>`:"",
+             // 17.9.2026 (Pertti): katunäkymästä näkee heti onko rakennus vanha vai uusi,
+             // onko kyseessä konversio vai purku — tieto jota lupapaperi ei kerro.
+             p._lat?`<a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p._lat},${p._lon}" target="_blank" rel="noopener">Katunäkymä →</a>`:""]
             .filter(Boolean).join("");
   return `<div class="lp"><b>${esc(p.nimi)}</b><br>
     <span class="chip kunta">${esc(p.kunta)}</span><span class="chip" style="background:${v.color}">${esc(v.label)}</span>
     <table>
-      ${nimiOs?"":row("Osoite", p.osoite, 60)}
-      <tr><td class="k">Operaattori</td><td>${p.operaattori?`<b title="${esc(p.operaattori)}">${esc(cut(p.operaattori,50))}</b>`:`<span style="color:#8a908b">ei tiedossa</span>`}</td></tr>
-      ${row("Kehittäjä", p.kehittaja, 55)}
-      ${row("Sijoittaja", p.sijoittaja, 45)}
-      ${row("Käyttö", p.kaytto, 80)}
-      ${row("Paikat", p.paikat, 45)}
-      ${row("Valmis", p.valmis, 40)}
-      ${p.lupa?row("Lupa", p.lupa, 75):row("Aikaikkuna", p.aikaikkuna, 55)}
-      ${row("HVA", p.hva, 80)}
-      ${row("Viimeisin", viim, 85)}
+      ${nimiOs?"":row("Osoite", p.osoite)}
+      <tr><td class="k">Operaattori</td><td>${p.operaattori?`<b>${esc(String(p.operaattori).trim())}</b>`:`<span style="color:#8a908b">ei tiedossa</span>`}</td></tr>
+      ${row("Kehittäjä", p.kehittaja)}
+      ${row("Sijoittaja", p.sijoittaja)}
+      ${row("Käyttö", p.kaytto)}
+      ${row("Paikat", p.paikat)}
+      ${row("Valmis", p.valmis)}
+      ${p.lupa?row("Lupa", p.lupa):row("Aikaikkuna", p.aikaikkuna)}
+      ${row("HVA", p.hva)}
+      ${row("Viimeisin", viim)}
     </table>${tun?`<div class="tun">${tun}</div>`:""}<div class="lnk">${lnk}</div></div>`;
 }
 // Operaattoriryhmä suodatinta varten: sulkeet pois ("IKIFIT (tulossa)" → "IKIFIT"),
@@ -149,6 +151,7 @@ function render(fc){
   const counts={};
   for(const f of fc.features){
     const p=f.properties, c=f.geometry.coordinates, ll=[c[1],c[0]];
+    p._lat=c[1]; p._lon=c[0];   // 17.9.2026: Street View -linkkiä varten popupissa
     const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
     const approx=p.tarkkuus&&p.tarkkuus!=="talo";
     const known=!!p.operaattori;
