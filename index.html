@@ -112,7 +112,8 @@ function popupHtml(p){
              KAAVOITUS[p.kunta]?`<a href="${esc(KAAVOITUS[p.kunta])}" target="_blank" rel="noopener">Kaavoitus →</a>`:"",
              // 17.9.2026 (Pertti): katunäkymästä näkee heti onko rakennus vanha vai uusi,
              // onko kyseessä konversio vai purku — tieto jota lupapaperi ei kerro.
-             p._lat?`<a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p._lat},${p._lon}" target="_blank" rel="noopener">Katunäkymä →</a>`:""]
+             // viewpoint = lähin katupiste, heading = kohti rakennusta (ks. _sv_katupiste)
+             p.sv?`<a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p.sv[0]},${p.sv[1]}${p.sv[2]!=null?"&heading="+p.sv[2]:""}&pitch=5&fov=80" target="_blank" rel="noopener">Katunäkymä →</a>`:""]
             .filter(Boolean).join("");
   return `<div class="lp"><b>${esc(p.nimi)}</b><br>
     <span class="chip kunta">${esc(p.kunta)}</span><span class="chip" style="background:${v.color}">${esc(v.label)}</span>
@@ -151,7 +152,6 @@ function render(fc){
   const counts={};
   for(const f of fc.features){
     const p=f.properties, c=f.geometry.coordinates, ll=[c[1],c[0]];
-    p._lat=c[1]; p._lon=c[0];   // 17.9.2026: Street View -linkkiä varten popupissa
     const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
     const approx=p.tarkkuus&&p.tarkkuus!=="talo";
     const known=!!p.operaattori;
