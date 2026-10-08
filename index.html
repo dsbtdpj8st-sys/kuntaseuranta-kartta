@@ -64,7 +64,7 @@
 <div id="map"></div>
 <div class="panel head">
   <h1>Kuntaseuranta — hoiva- ja erityisryhmähankkeet</h1>
-  <p>Turku · Raisio · Helsinki · Espoo · Vantaa · Tampere · Kangasala · Pirkkala · Ylöjärvi · <span class="upd" id="upd"></span></p>
+  <p>Turku · Raisio · Helsinki · Espoo · Vantaa · Tampere · Kangasala · Pirkkala · Ylöjärvi · Keusote (Hyvinkää · Järvenpää · Mäntsälä · Nurmijärvi · Pornainen · Tuusula) · <span class="upd" id="upd"></span></p>
   <p style="margin-top:4px">Erityisryhmien hoiva-/asumishankkeet kuntien päätöksenteosta. Toimijatiedot (operaattori/kehittäjä) julkisista lähteistä: uutiset, päätökset, tiedotteet.</p>
   <details id="ilman" hidden><summary></summary><ul></ul></details>
 </div>
@@ -87,7 +87,15 @@ const KAAVOITUS={Turku:"https://www.turku.fi/kaavoitus",Raisio:"https://www.rais
   Helsinki:"https://www.hel.fi/fi/kaupunkiymparisto-ja-liikenne/kaupunkisuunnittelu-ja-rakentaminen",
   Kangasala:"https://www.kangasala.fi/asu-hyvin/kaavoitus/nahtavilla-ja-vireilla-olevia-asemakaavoja-ja-ranta-asemakaavoja/",
   Pirkkala:"https://www.pirkkala.fi/kehita-pirkkalaa/kaavat/vireilla-olevat-asemakaavat/",
-  "Ylöjärvi":"https://www.ylojarvi.fi/asemakaavat-vireilla/"};
+  "Ylöjärvi":"https://www.ylojarvi.fi/asemakaavat-vireilla/",
+  "Hyvinkää":"https://www.hyvinkaa.fi/asuinymparisto-ja-rakentaminen/kaavoitus1/asemakaavoitus/",
+  "Järvenpää":"https://www.jarvenpaa.fi/asuminen-ja-ymparisto/maankaytto-ja-kaavoitus/asemakaavoitus",
+  "Mäntsälä":"https://www.mantsala.fi/asuminen-ja-ymparisto/kaavoitus-ja-maankaytto/",
+  Nurmijärvi:"https://www.nurmijarvi.fi/kuntalaisen-palvelut/maankaytto-ja-liikenne/kaavoitus/",
+  Pornainen:"https://pornainen.fi/kuntalaiset/maankaytto-ja-kaavoitus/asemakaavat/",
+  Tuusula:"https://tuusula.fi/etusivu/asuminen-ja-ymparisto/kaavoitus/"};
+// #Keusote → kaikki hyvinvointialueen kunnat kerralla (Pertti 8.10.2026: "Keusoten alueelle tuleva kapasiteetti")
+const ALUEET={keusote:["hyvinkää","järvenpää","mäntsälä","nurmijärvi","pornainen","tuusula"]};
 const map=L.map("map",{zoomControl:true});
 const osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
   {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'});
@@ -203,7 +211,8 @@ function render(fc){
   function fit(){
     if(!map.getSize().x){ setTimeout(fit,300); return; }   // piilotettu välilehti: odota kokoa
     const k=decodeURIComponent(location.hash.slice(1)).toLowerCase();
-    const kb=k?fc.features.filter(f=>(f.properties.kunta||"").toLowerCase()===k)
+    const kk=ALUEET[k]||[k];
+    const kb=k?fc.features.filter(f=>kk.includes((f.properties.kunta||"").toLowerCase()))
                 .map(f=>[f.geometry.coordinates[1],f.geometry.coordinates[0]]):[];
     const b=kb.length?kb:bounds;
     if(b.length) map.fitBounds(b,{padding:[45,45]}); else map.setView([60.47,22.25],11);
