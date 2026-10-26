@@ -127,7 +127,7 @@ function popupHtml(p){
     <span class="chip kunta">${esc(p.kunta)}</span><span class="chip" style="background:${v.color}">${esc(v.label)}</span>
     <table>
       ${nimiOs?"":row("Osoite", p.osoite)}
-      <tr><td class="k">Operaattori</td><td>${p.operaattori?`<b>${esc(String(p.operaattori).trim())}</b>`:`<span style="color:#8a908b">ei tiedossa</span>`}</td></tr>
+      <tr><td class="k">Operaattori</td><td>${opTiedossa(p)?`<b>${esc(String(p.operaattori).trim())}</b>`:p.operaattori?esc(String(p.operaattori).trim()):`<span style="color:#8a908b">ei tiedossa</span>`}</td></tr>
       ${row("Kehittäjä", p.kehittaja)}
       ${row("Sijoittaja", p.sijoittaja)}
       ${row("Käyttö", p.kaytto)}
@@ -144,6 +144,8 @@ function opKey(p){
   const o=(p.operaattori||"").replace(/\s*[(;].*$/,"").replace(/\s+(Oy|Oyj|Ab)$/,"").trim();
   return o||"(ei tiedossa)";
 }
+// "auki (arvio: Pirha, …)" = liitepoiminnan arvio kehittäjän muista kohteista (26.10.2026), ei tiedossa oleva operaattori
+function opTiedossa(p){ return !!p.operaattori && !/^\s*auki/i.test(p.operaattori); }
 let SHOW_INT=false;
 function sisHtml(s){
   const row=(k,val)=> val ? `<tr><td class="k">${k}</td><td>${esc(val)}</td></tr>` : "";
@@ -162,7 +164,7 @@ function render(fc){
     const p=f.properties, c=f.geometry.coordinates, ll=[c[1],c[0]];
     const v=VAIHE[p.vaihe]||VAIHE.Kaavoitus;
     const approx=p.tarkkuus&&p.tarkkuus!=="talo";
-    const known=!!p.operaattori;
+    const known=opTiedossa(p);
     // operaattori tiedossa → tumma reunus erottaa attribuoidut hankkeet yhdellä silmäyksellä
     const m=L.circleMarker(ll,{radius:known?10:9,fillColor:v.color,
       color:known?"#1b211f":"#fff",weight:known?3:2.5,
@@ -180,7 +182,7 @@ function render(fc){
   }
   function cur(p){ return SHOW_INT&&p._int ? Object.assign({},p,p._int) : p; }
   function labelOf(a){ const q=cur(a.p); if(a.sis) return "◆ "+esc(q.nimi);
-    return esc(q.nimi)+(q.operaattori?" → "+esc(opKey(q)):""); }
+    return esc(q.nimi)+(opTiedossa(q)?" → "+esc(opKey(q)):""); }
   function bindAll(){
     for(const a of all){
       const q=cur(a.p);
